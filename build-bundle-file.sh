@@ -285,42 +285,18 @@ cp rz_mk_gemrc.yaml tmp-build-dir/root/.gemrc
 
 # create a copy of the local TCL Extension mirror that we will be running within
 # our Microkernel instances
-mkdir -p tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz
-cp -p tmp/tinycorelinux/*.yaml tmp-build-dir/tmp/tinycorelinux
-for file in `cat $MIRROR_LIST`; do
-  if [ $RE_USE_PREV_DL = 'no' ] || [ ! -f tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz/$file ]
-  then
-    wget -P tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz $TCL_MIRROR_URI/$file
-    wget -P tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz -q $TCL_MIRROR_URI/$file.md5.txt
-    wget -P tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz -q $TCL_MIRROR_URI/$file.info
-    wget -P tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz -q $TCL_MIRROR_URI/$file.list
-    wget -P tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz -q $TCL_MIRROR_URI/$file.dep
-  fi
-done
+echo "Mirroring additional TCE files"
+./bin/mirror-tce -d tmp-build-dir/tmp/tinycorelinux/4.x/x86/tcz \
+    -s "$TCL_MIRROR_URI" $(cat "$MIRROR_LIST")
 
 # download a set of extensions that will be installed during the Microkernel
 # boot process.  These files will be placed into the /tmp/builtin directory in
 # the Microkernel ISO.  The list of files downloaded (and loaded at boot) are
 # assumed to be contained in the file specified by the BUILTIN_LIST parameter
-echo `pwd`
-mkdir -p tmp-build-dir/tmp/builtin/optional
-rm tmp-build-dir/tmp/builtin/onboot.lst 2> /dev/null
-for file in `cat $BUILTIN_LIST`; do
-  if [ $BUNDLE_TYPE != 'prod' ] || [ ! $file = 'openssh.tcz' ]; then
-    if [ $RE_USE_PREV_DL = 'no' ] || [ ! -f tmp-build-dir/tmp/builtin/optional/$file ]
-    then
-      wget -P tmp-build-dir/tmp/builtin/optional $TCL_MIRROR_URI/$file
-      wget -P tmp-build-dir/tmp/builtin/optional -q $TCL_MIRROR_URI/$file.md5.txt
-      wget -P tmp-build-dir/tmp/builtin/optional -q $TCL_MIRROR_URI/$file.dep
-    fi
-    echo $file >> tmp-build-dir/tmp/builtin/onboot.lst
-  elif [ $BUNDLE_TYPE = 'prod' ] && [ -f tmp-build-dir/tmp/builtin/optional/$file ]
-  then
-    rm tmp-build-dir/tmp/builtin/optional/$file
-    rm tmp-build-dir/tmp/builtin/optional/$file.md5.txt 2> /dev/null
-    rm tmp-build-dir/tmp/builtin/optional/$file.dep 2> /dev/null
-  fi
-done
+echo "Mirroring built-in TCE files"
+./bin/mirror-tce -d tmp-build-dir/tmp/builtin/optional \
+    -s "$TCL_MIRROR_URI" -l tmp-build-dir/tmp/builtin/onboot.lst \
+    $(cat "$BUILTIN_LIST")
 
 # download the ruby-gems distribution (will be installed during the boot
 # process prior to starting the Microkernel initialization process)

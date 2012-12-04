@@ -1,0 +1,107 @@
+#!/usr/bin/env ruby
+require 'optparse'
+require 'pathname'
+require 'uri'
+require 'net/http'
+
+$where  = '.'
+$server = 'http://distro.ibiblio.org/tinycorelinux/4.x/x86/tcz'
+$proxy  = ENV['HTTP_PROXY'] || ENV['http_proxy']
+$list   = nil
+
+optparse = OptionParser.new do |o|
+  o.banner = "Usage: #{$0} [OPTIONS] tce [tce...]"
+  o.separator <<EOT
+
+Download and save a TCE file to disk, including saving any missing dependencies
+at the same time.
+
+You specify the TCE by name: `fuse` or `glib`.
+
+OPTIONS:
+EOT
+
+  o.on('--list NAME', '-l NAME', 'save the sames of all downloaded files') do |name|
+    $list = name
+  end
+
+  o.on('--dir DIR', '-d DIR', 'the directory to save TCE files to') do |dir|
+    $where = dir
+  end
+
+  o.on('--server URL', '-s URL', 'the remote TCE mirror URL') do |url|
+    $server = url
+  end
+
+  o.on('--proxy URL', '-p URL', 'the HTTP proxy to use for fetching files') do |url|
+    $proxy = url
+  end
+end
+
+optparse.parse!
+
+# Upgrade the target location to a pathname, and ensure that it exists
+$where = Pathname($where)
+$where.mkpath
+
+
+def http
+  $http ||= if $proxy
+              uri        = URI.parse($proxy)
+              host       = uri.host
+              port       = uri.port
+              user, pass = uri.userinfo.split(':') if uri.userinfo
+              Net::HTTP::Proxy(host, port, user, pass)
+            else
+              Net::HTTP
+            end
+end
+
+def mirror_file(url, output, allow_missing = false)
+  return true if File.exist? output
+
+  print "Fetching #{url}: "
+  http.get_response(URI.parse(url)) do |response|
+    if response.code == "200"
+      count = 0
+      File.open(output, 'wb') do |f|
+        response.read_body do |data|
+          print '.' if count == 0
+          count = 0 if (count += data.size) > 2 ** 18
+          f.print data
+        end
+      end
+      puts " done."
+    elsif allow_missing and response.code == "404"
+      puts "optional file missing."
+    else
+      puts "failed: #{response}"
+      exit 1
+    end
+  end
+  return true
+end
+
+def mirror_tce(target, name)
+  fetched = [name]
+
+  output = target + name
+  # Fetch all the informational files; the dependency list is optional.
+  ['', '.md5.txt', '.info', '.list', '.dep'].each do |ext|
+    mirror_file("#{$server}/#{name}#{ext}", "#{output}#{ext}", ext == '.dep')
+  end
+
+  if File.exist?("#{output}.dep")
+    File.read("#{output}.dep").split(/\n/).each do |dep|
+      fetched += mirror_tce(target, dep)
+    end
+  end
+
+  return fetched
+end
+
+mirrored = []
+ARGV.each {|tce| mirrored += mirror_tce($where, tce) }
+$list and File.open($list, 'w') {|f| f.puts mirrored.uniq }
+
+exit true
