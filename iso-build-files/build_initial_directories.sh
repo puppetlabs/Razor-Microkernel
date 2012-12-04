@@ -1,20 +1,19 @@
 #!/bin/sh
+origdir='original-iso-files'
 
-rm -rf original-iso-files extract tmp newiso
+rm -rf ${origdir} extract tmp newiso
 
-# get a copy of the files from the original ISO
-if [ ! -d /tmp/cdrom ]; then
-    mkdir /tmp/cdrom
-fi
-mount Core-current.iso /tmp/cdrom -o loop
-mkdir original-iso-files
-cp -a /tmp/cdrom/boot original-iso-files/
-umount /tmp/cdrom
+# extract the TCL boot files from the original ISO
+mkdir ${origdir}
+7z -o${origdir} x Core-current.iso
+
+# Remove the El-Torito boot image that 7zip unpacked for us
+rm -r ${origdir}/'[BOOT]'
 
 # extract the boot/core.gz file from that directory
 mkdir extract
 cd extract
-zcat ../original-iso-files/boot/core.gz | cpio -i -H newc -d
+zcat ../${origdir}/boot/core.gz | cpio -i -H newc -d
 
 # copy the resulting files over to a temporary directory (which we will
 # use to build a new core.gz file for a new ISO
@@ -36,5 +35,5 @@ done
 
 cd ..
 mkdir newiso
-cp -rp original-iso-files/boot newiso
+cp -rp ${origdir}/boot newiso
 sed -i "s/timeout 300/timeout 100/" newiso/boot/isolinux/isolinux.cfg
