@@ -15,18 +15,18 @@ DIR_NAME=`pwd`
 set -x
 # build the YAML file in the Microkernel's filesystem that will be used to
 # display this same version information during boot
-./add_version_to_mk_fs.rb tmp ${ISO_VERSION}
-# run chroot and ldconfig on the tmp directory (preparing it for construction
+./add_version_to_mk_fs.rb extract ${ISO_VERSION}
+# run chroot and ldconfig on the extract directory (preparing it for construction
 # of a bootable core.gz file)
 #chroot ${DIR_NAME}/tmp depmod -a 3.0.21-tinycore
-chroot ${DIR_NAME}/tmp depmod -a `ls ${DIR_NAME}/extract/lib/modules`
-ldconfig -r ${DIR_NAME}/tmp
-# build the new core.gz file (containing the contents of the tmp directory)
-cd tmp
+chroot ${DIR_NAME}/extract depmod -a `ls ${DIR_NAME}/extract/lib/modules`
+ldconfig -r ${DIR_NAME}/extract
+# build the new core.gz file (containing the contents of the extract directory)
+cd extract
 find | cpio -o -H newc | gzip -2 > ../core.gz
 cd ..
 # compress the file and copy it to the correct location for building the ISO
-advdef -z4 core.gz 
+advdef -z4 core.gz
 cp -p core.gz newiso/boot/
 # build the YAML file needed for use in Razor, place it into the root of the
 # ISO filesystem
