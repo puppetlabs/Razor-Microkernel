@@ -1,6 +1,8 @@
 #!/bin/bash
 set -ex
 
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+
 if [ $# -ne 1 ]
 then
   echo "USAGE:  `echo $0 | awk -F'/' '{print $(NF)}' -` ISO_VERSION"
@@ -57,14 +59,21 @@ sed -i "s/timeout 300/timeout 100/" newiso/boot/isolinux/isolinux.cfg
 # build the YAML file in the Microkernel's filesystem that will be used to
 # display this same version information during boot
 ./add_version_to_mk_fs.rb extract ${ISO_VERSION}
-# run chroot and ldconfig on the extract directory (preparing it for construction
-# of a bootable core.gz file)
-#chroot ${DIR_NAME}/tmp depmod -a 3.0.21-tinycore
-chroot ${DIR_NAME}/extract depmod -a `ls ${DIR_NAME}/extract/lib/modules`
-ldconfig -r ${DIR_NAME}/extract
+
+# Run chroot and ldconfig on the extract directory (preparing it for
+# construction of a bootable core.gz file)
+#
+# We need to modify one symlink from absolute to relative to support doing
+# this without the need for a `chroot` jail - which means we can fully build
+# the ISO image without root privileges.
+KERNEL_VERSION="$(ls "${DIR_NAME}/extract/lib/modules")"
+ln -sf "../../../usr/local/lib/modules/${KERNEL_VERSION}/kernel" \
+    "extract/lib/modules/${KERNEL_VERSION}/kernel.tclocal"
+depmod -b "${DIR_NAME}/extract" -a "${KERNEL_VERSION}"
+ldconfig -r "${DIR_NAME}/extract"
 # build the new core.gz file (containing the contents of the extract directory)
 cd extract
-find | cpio -o -H newc | gzip -2 > ../core.gz
+find | cpio -o -H newc | gzip -9 > ../core.gz
 cd ..
 # compress the file and copy it to the correct location for building the ISO
 advdef -z4 core.gz
