@@ -22,6 +22,16 @@ if test `id -u` -ne 0; then
     exit 1
 fi
 
+# We need to work out which of the set of tool names for building ISO images
+# is used on this platform, and save it for later.
+GENISO=$(type -p genisoimage)
+test x"$GENISO" = x"" && GENISO=$(type -p mkisofs)
+if test x"$GENISO" = x""; then
+    echo "Rebuilding the ISO image requires genisoimage or mkisofs."
+    echo "Please install one of them; prefer genisoimage."
+    exit 1
+fi
+
 origdir='original-iso-files'
 
 rm -rf ${origdir} extract newiso
@@ -81,5 +91,10 @@ cp -p core.gz newiso/boot/
 # build the YAML file needed for use in Razor, place it into the root of the
 # ISO filesystem
 ./build_iso_yaml.rb newiso ${ISO_VERSION} boot/vmlinuz boot/core.gz
-# finally, build the ISO itself (using the contents of the newiso directory as input
-mkisofs -l -J -R -V TC-custom -no-emul-boot -boot-load-size 4   -boot-info-table -b boot/isolinux/isolinux.bin   -c boot/isolinux/boot.cat -o ${ISO_NAME} newiso
+
+# finally, build the ISO itself from the newiso directory
+"${GENISO}" -l -J -R -V TC-custom \
+    -no-emul-boot -boot-load-size 4 -boot-info-table \
+    -b boot/isolinux/isolinux.bin \
+    -c boot/isolinux/boot.cat \
+    -o "${ISO_NAME}" newiso
