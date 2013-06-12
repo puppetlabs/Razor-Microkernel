@@ -30,7 +30,7 @@ module RazorMicrokernel
     def wait_until_nw_avail
 
       # Set a few flags/values that will be used later on
-      nic_found = false
+      check_firmware_once = false
       nic_has_ip_addr = false
       found_a_valid_ip = false
       dev_prefix = nil
@@ -47,9 +47,19 @@ module RazorMicrokernel
       begin
 
         if wait_time > 0.0
-          # if a NIC wasn't found in the previous attempt, try reloading the
-          # firmware drivers that were installed in the kernel module
-          unless nic_found
+          # perform firmware (re)loading workaround once - for all NICs which are known to
+          # require a firmware (NETWORK_MOD_SEL_PATTERN)
+          #
+          # This workaround is require for TinyCore Linux since NIC firmware got shipped
+          # as an tcz-extension. The intial kernel driver probe would always fail since
+          # the tcz-extension would be loaded during the early boot stage.
+          # This workaround unloads and loads the driver to get initliazed correctly
+          # with firmware present.
+          #
+          # perform this check even if there are other NICs already available. They might
+          # be still unusable (not connected, network without DHCP, ...).
+          unless check_firmware_once
+            check_firmware_once = true
             kernel_mod_list = %x[lsmod].split("\n")
             network_mod_list = kernel_mod_list.select{|elem| NETWORK_MOD_SEL_PATTERN.match(elem)}.map{|match| match.split()[0]}
             if network_mod_list.length > 0
@@ -83,9 +93,6 @@ module RazorMicrokernel
           # set a flag indicating whether or not we found a NIC with an IP address assigned to it
           this_nic_pref_matches = (dev_prefix != nil)
           nic_has_ip_addr = (this_nic_pref_matches && /inet addr:\d+\.\d+\.\d+\.\d+\s+/.match(entry) != nil)
-
-          # and set a flag indicating whether or not we found any NICs (at least one) with the right prefix
-          nic_found = this_nic_pref_matches unless nic_found
 
           # if we find an adapter that matches the criteria, above, then
           # check to see if it has a valid IP address and break out of the
